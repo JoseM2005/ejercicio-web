@@ -4,6 +4,71 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Helper: create participant list item node
+  function createParticipantLi(email, activityName) {
+    const li = document.createElement('li');
+
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    avatar.textContent = email.charAt(0).toUpperCase();
+
+    const emailSpan = document.createElement('span');
+    emailSpan.className = 'email';
+    emailSpan.textContent = email;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.dataset.activity = activityName;
+    removeBtn.dataset.email = email;
+    removeBtn.textContent = '×';
+
+    li.appendChild(avatar);
+    li.appendChild(emailSpan);
+    li.appendChild(removeBtn);
+    li.classList.add('new-participant');
+
+    // Remove highlight after a short delay
+    setTimeout(() => li.classList.remove('new-participant'), 2000);
+
+    return li;
+  }
+
+  // Helper: update specific activity card in-place to show new participant and availability
+  function updateActivityCardAfterSignup(activityName, email) {
+    const cards = activitiesList.querySelectorAll('.activity-card');
+    for (const card of cards) {
+      const h4 = card.querySelector('h4');
+      if (h4 && h4.textContent === activityName) {
+        // Update availability text
+        const availabilityP = Array.from(card.querySelectorAll('p')).find(p => p.querySelector('strong') && p.querySelector('strong').textContent.includes('Availability'));
+        if (availabilityP) {
+          const match = availabilityP.textContent.match(/(\d+) spots left/);
+          if (match) {
+            let spots = parseInt(match[1], 10) - 1;
+            if (spots < 0) spots = 0;
+            availabilityP.innerHTML = `<strong>Availability:</strong> ${spots} spots left`;
+          }
+        }
+
+        // Add participant to the participants list
+        const details = card.querySelector('details.participants');
+        if (details) {
+          let ul = details.querySelector('ul');
+          if (!ul) {
+            ul = document.createElement('ul');
+            details.appendChild(ul);
+          }
+          const newLi = createParticipantLi(email, activityName);
+          ul.appendChild(newLi);
+          details.open = true;
+        }
+        return;
+      }
+    }
+    // If card not found, fallback to full refresh
+    fetchActivities();
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -21,9 +86,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        // Build participants list HTML (styled chips with avatars)
+        // Build participants list HTML (styled chips with avatars and remove button)
         const participantsHtml = details.participants && details.participants.length > 0
-          ? `<details class="participants"><summary>Participants (${details.participants.length})</summary><ul>${details.participants.map(p => `<li><span class="avatar">${p.charAt(0).toUpperCase()}</span><span class="email">${p}</span></li>`).join('')}</ul></details>`
+          ? `<details class="participants"><summary>Participants (${details.participants.length})</summary><ul>${details.participants.map(p => `<li><span class="avatar">${p.charAt(0).toUpperCase()}</span><span class="email">${p}</span><button class="remove-btn" data-activity="${name}" data-email="${p}">×</button></li>`).join('')}</ul></details>`
           : `<details class="participants"><summary>Participants (0)</summary><div class="no-participants">No participants yet.</div></details>`;
 
         activityCard.innerHTML = `
@@ -106,8 +171,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
-        // Refresh activities so participants and availability update
-        fetchActivities();
+        // Update the activity card in-place so the new participant appears immediately
+        updateActivityCardAfterSignup(activity, email);
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
