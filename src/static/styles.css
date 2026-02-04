@@ -132,6 +132,88 @@ button:hover {
   border: 1px solid #bee5eb;
 }
 
+/* Participants section styling */
+.participants {
+  margin-top: 10px;
+  border-top: 1px dashed #e0e0e0;
+  padding-top: 10px;
+}
+
+.participants summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #fafafa, #f3f6ff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #1a237e;
+  border: 1px solid #e0e3f8;
+}
+
+.participants[open] summary {
+  box-shadow: 0 1px 4px rgba(26,35,126,0.08);
+}
+
+.participants summary::after {
+  content: "▾";
+  transition: transform 0.2s;
+  margin-left: 10px;
+  font-size: 12px;
+}
+
+.participants[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.participants ul {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.participants li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #f1f5ff;
+  border: 1px solid #e6eefc;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #0f3d8e;
+}
+
+.participants .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(90deg,#3949ab,#1a237e);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.participants .email {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.no-participants {
+  color: #666;
+  padding: 8px 0;
+}
+
 .hidden {
   display: none;
 }
