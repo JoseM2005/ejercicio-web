@@ -173,8 +173,9 @@ button:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  list-style: none;
-  padding: 0;
+  list-style: none; /* explicitly remove bullets */
+  padding: 0; /* remove default padding */
+  margin: 0; /* remove default margin */
 }
 
 .participants li {
@@ -203,11 +204,31 @@ button:hover {
 }
 
 .participants .email {
-  max-width: 160px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.participants .remove-btn {
+  background: transparent;
+  border: none;
+  color: #c62828;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 6px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+
+.participants .remove-btn:hover {
+  background: rgba(198,40,40,0.12);
+} 
 
 .no-participants {
   color: #666;

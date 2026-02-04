@@ -48,6 +48,43 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Event delegation: handle remove participant clicks
+  activitiesList.addEventListener("click", async (e) => {
+    const btn = e.target.closest('.remove-btn');
+    if (!btn) return;
+
+    const email = btn.dataset.email;
+    const activityName = btn.dataset.activity;
+
+    if (!confirm(`Remove ${email} from ${activityName}?`)) return;
+
+    try {
+      const resp = await fetch(
+        `/activities/${encodeURIComponent(activityName)}/participants?email=${encodeURIComponent(email)}`,
+        { method: 'DELETE' }
+      );
+      const result = await resp.json();
+
+      if (resp.ok) {
+        messageDiv.textContent = result.message;
+        messageDiv.className = 'success';
+        // Refresh activities so participants and availability update
+        fetchActivities();
+      } else {
+        messageDiv.textContent = result.detail || 'Error removing participant';
+        messageDiv.className = 'error';
+      }
+
+      messageDiv.classList.remove('hidden');
+      setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+    } catch (err) {
+      messageDiv.textContent = 'Failed to remove participant. Please try again.';
+      messageDiv.className = 'error';
+      messageDiv.classList.remove('hidden');
+      console.error('Error removing participant:', err);
+    }
+  });
+
   // Handle form submission
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
