@@ -7,9 +7,11 @@ for extracurricular activities at Mergington High School.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 import os
 from pathlib import Path
+import asyncio
+import json
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -38,6 +40,48 @@ activities = {
         "schedule": "Mondays, Wednesdays, Fridays, 2:00 PM - 3:00 PM",
         "max_participants": 30,
         "participants": ["john@mergington.edu", "olivia@mergington.edu"]
+    },
+
+    # Additional sports activities
+    "Basketball Team": {
+        "description": "Competitive basketball team with regular practices and games",
+        "schedule": "Mondays, Wednesdays, Fridays, 4:00 PM - 6:00 PM",
+        "max_participants": 15,
+        "participants": ["ryan@mergington.edu", "nina@mergington.edu"]
+    },
+    "Swimming Club": {
+        "description": "Lap swimming, water safety and friendly meets",
+        "schedule": "Tuesdays and Thursdays, 5:00 PM - 6:30 PM",
+        "max_participants": 20,
+        "participants": ["liam@mergington.edu", "ava@mergington.edu"]
+    },
+
+    # Artistic activities
+    "Art Club": {
+        "description": "Painting, drawing and student exhibitions",
+        "schedule": "Wednesdays, 3:30 PM - 5:00 PM",
+        "max_participants": 18,
+        "participants": ["isabella@mergington.edu", "mia@mergington.edu"]
+    },
+    "Drama Club": {
+        "description": "Theater production, acting and stagecraft",
+        "schedule": "Thursdays, 4:00 PM - 6:00 PM",
+        "max_participants": 25,
+        "participants": ["jacob@mergington.edu", "emma@mergington.edu"]
+    },
+
+    # Intellectual activities
+    "Debate Club": {
+        "description": "Debate practice, public speaking and competitions",
+        "schedule": "Fridays, 3:30 PM - 5:00 PM",
+        "max_participants": 20,
+        "participants": ["noah@mergington.edu", "oliver@mergington.edu"]
+    },
+    "Science Club": {
+        "description": "Hands-on experiments, research and science fairs",
+        "schedule": "Tuesdays, 3:30 PM - 4:30 PM",
+        "max_participants": 16,
+        "participants": ["sophia@mergington.edu", "ben@mergington.edu"]
     }
 }
 
@@ -51,6 +95,34 @@ def root():
 def get_activities():
     return activities
 
+# In-memory list of connected SSE clients (asyncio.Queue objects)
+clients: list = []
+
+@app.get("/events")
+async def sse_events():
+    """Server-Sent Events endpoint: pushes signup/remove events to connected clients."""
+    q: asyncio.Queue = asyncio.Queue()
+    clients.append(q)
+
+    async def event_generator():
+        try:
+            # Send current state upon connection
+            await q.put({"event": "init", "data": activities})
+            while True:
+                item = await q.get()
+                # item should be a dict with 'event' and 'data'
+                yield f"event: {item['event']}\n"
+                yield f"data: {json.dumps(item['data'])}\n\n"
+        except asyncio.CancelledError:
+            # Client disconnected
+            pass
+        finally:
+            try:
+                clients.remove(q)
+            except ValueError:
+                pass
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
@@ -62,6 +134,39 @@ def signup_for_activity(activity_name: str, email: str):
     # Get the specific activity
     activity = activities[activity_name]
 
+    # Prevent duplicate signups
+    if email in activity["participants"]:
+        raise HTTPException(status_code=400, detail="Student already signed up for this activity")
+
+    # Prevent exceeding max participants
+    if len(activity["participants"]) >= activity["max_participants"]:
+        raise HTTPException(status_code=400, detail="Activity is full")
+
     # Add student
     activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
+
+
+@app.delete("/activities/{activity_name}/participants")
+def remove_participant(activity_name: str, email: str):
+    """Remove a student from an activity"""
+    # Validate activity exists
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    activity = activities[activity_name]
+
+    # Validate participant exists
+    if email not in activity["participants"]:
+        raise HTTPException(status_code=404, detail="Participant not found in activity")
+
+    activity["participants"].remove(email)
+
+    # Broadcast removal event to SSE clients
+    for q in list(clients):
+        try:
+            q.put_nowait({"event": "remove", "data": {"activity": activity_name, "email": email}})
+        except Exception:
+            pass
+
+    return {"message": f"Removed {email} from {activity_name}"}
