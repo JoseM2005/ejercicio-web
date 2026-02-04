@@ -228,7 +228,13 @@ button:hover {
 
 .participants .remove-btn:hover {
   background: rgba(198,40,40,0.12);
-} 
+}
+
+.participants li.new-participant {
+  box-shadow: 0 4px 14px rgba(26,35,126,0.08);
+  transform: translateY(-3px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
 
 .no-participants {
   color: #666;

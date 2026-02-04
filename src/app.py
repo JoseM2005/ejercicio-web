@@ -7,9 +7,11 @@ for extracurricular activities at Mergington High School.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 import os
 from pathlib import Path
+import asyncio
+import json
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -93,6 +95,34 @@ def root():
 def get_activities():
     return activities
 
+# In-memory list of connected SSE clients (asyncio.Queue objects)
+clients: list = []
+
+@app.get("/events")
+async def sse_events():
+    """Server-Sent Events endpoint: pushes signup/remove events to connected clients."""
+    q: asyncio.Queue = asyncio.Queue()
+    clients.append(q)
+
+    async def event_generator():
+        try:
+            # Send current state upon connection
+            await q.put({"event": "init", "data": activities})
+            while True:
+                item = await q.get()
+                # item should be a dict with 'event' and 'data'
+                yield f"event: {item['event']}\n"
+                yield f"data: {json.dumps(item['data'])}\n\n"
+        except asyncio.CancelledError:
+            # Client disconnected
+            pass
+        finally:
+            try:
+                clients.remove(q)
+            except ValueError:
+                pass
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
@@ -131,4 +161,12 @@ def remove_participant(activity_name: str, email: str):
         raise HTTPException(status_code=404, detail="Participant not found in activity")
 
     activity["participants"].remove(email)
+
+    # Broadcast removal event to SSE clients
+    for q in list(clients):
+        try:
+            q.put_nowait({"event": "remove", "data": {"activity": activity_name, "email": email}})
+        except Exception:
+            pass
+
     return {"message": f"Removed {email} from {activity_name}"}

@@ -39,6 +39,11 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const card of cards) {
       const h4 = card.querySelector('h4');
       if (h4 && h4.textContent === activityName) {
+        // Avoid duplicates: if participant already present, do nothing
+        if (card.querySelector(`button.remove-btn[data-email="${email}"]`)) {
+          return;
+        }
+
         // Update availability text
         const availabilityP = Array.from(card.querySelectorAll('p')).find(p => p.querySelector('strong') && p.querySelector('strong').textContent.includes('Availability'));
         if (availabilityP) {
@@ -53,14 +58,57 @@ document.addEventListener("DOMContentLoaded", () => {
         // Add participant to the participants list
         const details = card.querySelector('details.participants');
         if (details) {
+          // If previously 'No participants yet.' replace it with a UL
           let ul = details.querySelector('ul');
           if (!ul) {
+            const noDiv = details.querySelector('.no-participants');
+            if (noDiv) noDiv.remove();
             ul = document.createElement('ul');
             details.appendChild(ul);
           }
           const newLi = createParticipantLi(email, activityName);
           ul.appendChild(newLi);
           details.open = true;
+        }
+        return;
+      }
+    }
+    // If card not found, fallback to full refresh
+    fetchActivities();
+  }
+
+  // Helper: update specific activity card in-place to remove a participant and update availability
+  function updateActivityCardAfterRemove(activityName, email) {
+    const cards = activitiesList.querySelectorAll('.activity-card');
+    for (const card of cards) {
+      const h4 = card.querySelector('h4');
+      if (h4 && h4.textContent === activityName) {
+        const details = card.querySelector('details.participants');
+        if (details) {
+          const btn = details.querySelector(`button.remove-btn[data-email="${email}"]`);
+          if (btn) {
+            const li = btn.closest('li');
+            if (li) li.remove();
+          }
+
+          const ul = details.querySelector('ul');
+          if (!ul || (ul && ul.children.length === 0)) {
+            if (ul) ul.remove();
+            const noDiv = document.createElement('div');
+            noDiv.className = 'no-participants';
+            noDiv.textContent = 'No participants yet.';
+            details.appendChild(noDiv);
+          }
+        }
+
+        // Update availability text (increment)
+        const availabilityP = Array.from(card.querySelectorAll('p')).find(p => p.querySelector('strong') && p.querySelector('strong').textContent.includes('Availability'));
+        if (availabilityP) {
+          const match = availabilityP.textContent.match(/(\d+) spots left/);
+          if (match) {
+            let spots = parseInt(match[1], 10) + 1;
+            availabilityP.innerHTML = `<strong>Availability:</strong> ${spots} spots left`;
+          }
         }
         return;
       }
@@ -194,4 +242,44 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initialize app
   fetchActivities();
+
+  // Setup Server-Sent Events to receive roster updates in real-time
+  try {
+    const es = new EventSource('/events');
+
+    es.addEventListener('signup', (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        // Update UI for signup events
+        updateActivityCardAfterSignup(payload.activity, payload.email);
+      } catch (err) {
+        console.error('Error parsing signup event', err);
+      }
+    });
+
+    es.addEventListener('remove', (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        updateActivityCardAfterRemove(payload.activity, payload.email);
+      } catch (err) {
+        console.error('Error parsing remove event', err);
+      }
+    });
+
+    es.addEventListener('init', (e) => {
+      // Ensure we have the latest state on connect
+      try {
+        // Refresh whole UI with server state
+        fetchActivities();
+      } catch (err) {
+        console.error('Error handling init event', err);
+      }
+    });
+
+    es.onerror = (err) => {
+      console.warn('EventSource error', err);
+    };
+  } catch (err) {
+    console.warn('SSE not supported or failed to connect', err);
+  }
 });
